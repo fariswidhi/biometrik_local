@@ -38,6 +38,8 @@ DEFAULTS = {
     "pathfinger": r"C:\Program Files (x86)\BPJS Kesehatan\Aplikasi Sidik Jari BPJS Kesehatan\After.exe",
     "username": "",
     "password": "",
+    # Jika diisi, username/password diambil dari web anjungan (kolom di atas jadi cadangan)
+    "credentials_url": "",
     "allowed_origins": ["http://anjungan-rsud-pati.test"],
 }
 
@@ -56,6 +58,28 @@ def load_config():
     except FileNotFoundError:
         pass
     return cfg
+
+
+def fetch_credentials(url, timeout=5):
+    """Ambil {'username','password'} dari API web anjungan. Raise kalau gagal."""
+    import urllib.request
+
+    req = urllib.request.Request(url, headers={"Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    if not data.get("username") or not data.get("password"):
+        raise ValueError("Respon API tidak berisi username/password")
+    return data["username"], data["password"]
+
+
+def get_credentials(cfg):
+    """Dari API kalau credentials_url diisi, kalau gagal pakai username/password di config.json."""
+    if cfg.get("credentials_url"):
+        try:
+            return fetch_credentials(cfg["credentials_url"])
+        except Exception as e:
+            logging.error("Gagal ambil kredensial dari API (%s), memakai config lokal", e)
+    return cfg["username"], cfg["password"]
 
 
 def save_config(values):
@@ -85,6 +109,7 @@ def settings_window():
         "pathfinger": tk.StringVar(value=cfg["pathfinger"]),
         "username": tk.StringVar(value=cfg["username"]),
         "password": tk.StringVar(value=cfg["password"]),
+        "credentials_url": tk.StringVar(value=cfg["credentials_url"]),
     }
 
     def browse(key):
@@ -110,9 +135,26 @@ def settings_window():
     ttk.Label(frm, text="Password").grid(row=5, column=0, sticky="w", pady=3)
     ttk.Entry(frm, textvariable=vars_["password"], width=30, show="*").grid(
         row=5, column=1, sticky="w", padx=6)
-    ttk.Label(frm, foreground="#666",
-              text="Disimpan di config.json (teks biasa). Batasi akses folder aplikasi ini.").grid(
-        row=6, column=0, columnspan=3, sticky="w", pady=(8, 0))
+    ttk.Label(frm, text="URL API kredensial").grid(row=6, column=0, sticky="w", pady=(10, 3))
+    ttk.Entry(frm, textvariable=vars_["credentials_url"], width=60).grid(row=6, column=1, padx=6, pady=(10, 3))
+
+    def tes_api():
+        url = vars_["credentials_url"].get().strip()
+        if not url:
+            messagebox.showwarning("URL kosong", "Isi URL API kredensial dulu.", parent=root)
+            return
+        try:
+            user, _ = fetch_credentials(url)
+            messagebox.showinfo("Berhasil", "API merespons. Username dari server: %s" % user, parent=root)
+        except Exception as e:
+            messagebox.showerror("Gagal", "Tidak bisa mengambil kredensial:\n%s" % e, parent=root)
+
+    ttk.Button(frm, text="Tes", command=tes_api).grid(row=6, column=2, pady=(10, 3))
+    ttk.Label(frm, foreground="#666", justify="left",
+              text="Jika URL diisi, username/password diambil dari web anjungan setiap kali dipakai.\n"
+                   "Username/password di atas hanya cadangan kalau API tidak bisa dihubungi.\n"
+                   "Disimpan di config.json (teks biasa). Batasi akses folder aplikasi ini.").grid(
+        row=7, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
     def simpan():
         values = {k: v.get().strip() for k, v in vars_.items()}
@@ -132,7 +174,7 @@ def settings_window():
         root.destroy()
 
     btns = ttk.Frame(frm)
-    btns.grid(row=7, column=0, columnspan=3, sticky="e", pady=(14, 0))
+    btns.grid(row=8, column=0, columnspan=3, sticky="e", pady=(14, 0))
     ttk.Button(btns, text="Batal", command=root.destroy).grid(row=0, column=0, padx=6)
     ttk.Button(btns, text="Simpan", command=simpan).grid(row=0, column=1)
 
@@ -198,6 +240,7 @@ def run_finger(no_peserta):
     with ui_lock:
         try:
             cfg = load_config()
+            username, password = get_credentials(cfg)
             autoit.run(cfg["pathfinger"])
             if not autoit.win_wait_active(sel(FINGER_TITLE), 10):
                 logging.error("Window '%s' tidak muncul dalam 10 detik", FINGER_TITLE)
@@ -207,10 +250,10 @@ def run_finger(no_peserta):
 
             user32.BlockInput(True)
             try:
-                autoit.control_send(sel(FINGER_TITLE), "", cfg["username"], 1)
+                autoit.control_send(sel(FINGER_TITLE), "", username, 1)
                 autoit.control_send(sel(FINGER_TITLE), "", "{TAB}")
                 time.sleep(0.5)
-                autoit.control_send(sel(FINGER_TITLE), "", cfg["password"], 1)
+                autoit.control_send(sel(FINGER_TITLE), "", password, 1)
                 autoit.control_send(sel(FINGER_TITLE), "", "{TAB}")
                 autoit.control_send(sel(FINGER_TITLE), "", "{SPACE}")
             finally:
@@ -227,6 +270,7 @@ def run_frista(no_peserta):
     with ui_lock:
         try:
             cfg = load_config()
+            username, password = get_credentials(cfg)
             autoit.run(cfg["path"])
             autoit.win_wait(sel(FRISTA_LOGIN_TITLE), 10)
             autoit.win_activate(sel(FRISTA_LOGIN_TITLE))
@@ -235,11 +279,11 @@ def run_frista(no_peserta):
             user32.BlockInput(True)
             try:
                 autoit.control_focus(sel(FRISTA_LOGIN_TITLE), "TkChild4")
-                autoit.control_send(sel(FRISTA_LOGIN_TITLE), "TkChild4", cfg["username"], 1)
+                autoit.control_send(sel(FRISTA_LOGIN_TITLE), "TkChild4", username, 1)
                 autoit.control_send(sel(FRISTA_LOGIN_TITLE), "TkChild4", "{TAB}")
                 time.sleep(0.5)
                 autoit.control_focus(sel(FRISTA_LOGIN_TITLE), "TkChild3")
-                autoit.control_send(sel(FRISTA_LOGIN_TITLE), "TkChild3", cfg["password"], 1)
+                autoit.control_send(sel(FRISTA_LOGIN_TITLE), "TkChild3", password, 1)
                 autoit.control_send(sel(FRISTA_LOGIN_TITLE), "TkChild3", "{TAB}")
                 autoit.control_send(sel(FRISTA_LOGIN_TITLE), "Button1", "{SPACE}")
                 time.sleep(1)  # tunggu jendela utama Frista

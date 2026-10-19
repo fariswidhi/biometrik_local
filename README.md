@@ -46,3 +46,13 @@ Klik kanan ikon tray > **Pengaturan...** (atau klik dua kali ikon), atau jalanka
 (tombol Pilih...) serta mengisi username/password. Disimpan ke `config.json` dan langsung
 dipakai tanpa restart. Saat pertama kali dibuka tanpa `config.json`, jendela ini muncul otomatis.
 `allowed_origins` hanya bisa diubah lewat `config.json` (berlaku setelah aplikasi dibuka ulang).
+
+## Username & password dari web anjungan
+
+Isi **URL API kredensial** di jendela Pengaturan, misalnya
+`http://anjungan-rsud-pati.test/api/biometrik/credentials` (tombol **Tes** untuk mencoba).
+Username/password lalu diambil dari web setiap kali Frista/Sidik Jari dibuka, jadi cukup
+diubah sekali di halaman **Pengaturan Biometrik** pada web anjungan. Kalau API tidak bisa
+dihubungi, dipakai username/password cadangan di `config.json`.
+
+API ini tanpa token. Batasi dengan kolom "IP yang boleh mengambil kredensial" di halaman web.
