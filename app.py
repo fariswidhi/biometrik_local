@@ -102,6 +102,34 @@ def save_config(values):
         json.dump(cfg, f, indent=4, ensure_ascii=False)
 
 
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+RUN_NAME = "BiometrikLocal"
+
+
+def is_autostart():
+    import winreg
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as k:
+            return bool(winreg.QueryValueEx(k, RUN_NAME)[0])
+    except OSError:
+        return False
+
+
+def set_autostart(enabled):
+    """Daftarkan/hapus exe di HKCU\\...\\Run (tanpa hak administrator, aktif saat user login)."""
+    import winreg
+
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as k:
+        if enabled:
+            winreg.SetValueEx(k, RUN_NAME, 0, winreg.REG_SZ, '"%s"' % sys.executable)
+        else:
+            try:
+                winreg.DeleteValue(k, RUN_NAME)
+            except FileNotFoundError:
+                pass
+
+
 def settings_window():
     """Jendela pengaturan. Mengembalikan True kalau disimpan."""
     import tkinter as tk
@@ -162,6 +190,15 @@ def settings_window():
                    "(diatur di halaman Pengaturan Biometrik pada web anjungan).").grid(
         row=7, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
+    # Jalan otomatis saat Windows menyala: hanya untuk exe (bukan `python app.py`).
+    # Default aktif saat pertama kali dipasang (config.json belum ada).
+    autostart_var = tk.BooleanVar(value=is_autostart() or not os.path.isfile(CONFIG_PATH))
+    chk = ttk.Checkbutton(frm, text="Jalankan otomatis saat Windows menyala", variable=autostart_var)
+    chk.grid(row=8, column=0, columnspan=3, sticky="w", pady=(10, 0))
+    if not FROZEN:
+        autostart_var.set(False)
+        chk.state(["disabled"])
+
     def simpan():
         values = {k: v.get().strip() for k, v in vars_.items()}
         if not values["credentials_url"]:
@@ -178,12 +215,17 @@ def settings_window():
         except OSError as e:
             messagebox.showerror("Gagal menyimpan", "%s\n\n%s" % (CONFIG_PATH, e), parent=root)
             return
+        if FROZEN:
+            try:
+                set_autostart(autostart_var.get())
+            except OSError as e:
+                messagebox.showerror("Gagal mengatur auto-start", str(e), parent=root)
         saved["ok"] = True
         messagebox.showinfo("Tersimpan", "Pengaturan disimpan dan langsung dipakai.", parent=root)
         root.destroy()
 
     btns = ttk.Frame(frm)
-    btns.grid(row=8, column=0, columnspan=3, sticky="e", pady=(14, 0))
+    btns.grid(row=9, column=0, columnspan=3, sticky="e", pady=(14, 0))
     ttk.Button(btns, text="Batal", command=root.destroy).grid(row=0, column=0, padx=6)
     ttk.Button(btns, text="Simpan", command=simpan).grid(row=0, column=1)
 

@@ -57,3 +57,10 @@ atau `http://192.168.10.5:8000` (tombol **Tes** untuk mencoba). Kredensial diamb
 tidak dibuka dan penyebabnya tercatat di `biometrik.log`.
 
 API ini tanpa token. Batasi dengan kolom "IP yang boleh mengambil kredensial" di halaman web.
+
+## Jalan otomatis saat Windows menyala
+
+Centang **Jalankan otomatis saat Windows menyala** di jendela Pengaturan lalu Simpan
+(menulis `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, tanpa hak administrator,
+aktif saat user login). Default tercentang saat pertama kali dipasang. Hapus centangnya untuk
+mematikan. Jika exe dipindah ke folder lain, buka Pengaturan dan Simpan lagi agar path diperbarui.
