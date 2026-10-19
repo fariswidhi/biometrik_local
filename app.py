@@ -16,6 +16,7 @@ import logging
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 from ctypes import wintypes
@@ -24,7 +25,11 @@ import autoit
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Saat dibungkus exe (PyInstaller), config.json dibaca dari folder tempat exe berada
+if getattr(sys, "frozen", False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(BASE_DIR, "config.json"), "r", encoding="utf-8") as f:
     config = json.load(f)
 
@@ -40,7 +45,11 @@ FINGER_TITLE = "Aplikasi Registrasi Sidik Jari"
 app = Flask(__name__)
 # Hanya halaman anjungan yang boleh memanggil layanan ini dari browser
 CORS(app, origins=config.get("allowed_origins", ["http://anjungan-rsud-pati.test"]))
-logging.basicConfig(level=logging.INFO)
+# Tanpa konsol (exe), log ditulis ke biometrik.log di sebelah exe
+logging.basicConfig(
+    level=logging.INFO,
+    filename=os.path.join(BASE_DIR, "biometrik.log") if getattr(sys, "frozen", False) else None,
+)
 
 user32 = ctypes.windll.user32
 user32.BlockInput.argtypes = [wintypes.BOOL]
@@ -166,6 +175,33 @@ def stop_finger_exe():
     return stop("After.exe")
 
 
-if __name__ == "__main__":
+def run_server():
     # 127.0.0.1 saja: tidak boleh bisa diakses dari jaringan
     app.run(host="127.0.0.1", port=5000, debug=False)
+
+
+def run_tray():
+    """Jalankan server di thread terpisah dan tampilkan icon di system tray."""
+    import pystray
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", (64, 64), "#198754")
+    ImageDraw.Draw(img).ellipse((16, 16, 48, 48), fill="white")
+
+    def keluar(icon, item):
+        icon.stop()
+        os._exit(0)
+
+    threading.Thread(target=run_server, daemon=True).start()
+    menu = pystray.Menu(
+        pystray.MenuItem("Biometrik Local (port 5000)", None, enabled=False),
+        pystray.MenuItem("Keluar", keluar),
+    )
+    pystray.Icon("biometrik-local", img, "Biometrik Local", menu).run()
+
+
+if __name__ == "__main__":
+    if "--no-tray" in sys.argv:
+        run_server()
+    else:
+        run_tray()

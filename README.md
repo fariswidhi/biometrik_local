@@ -27,3 +27,15 @@ analisis statis. Verifikasi biometrik tetap dilakukan di aplikasi BPJS.
 - Bind hanya `127.0.0.1`, CORS dibatasi ke `allowed_origins`.
 - `no_peserta` harus 10-20 digit (tidak bisa dipakai menyuntik keystroke lain).
 - `config.json` menyimpan password teks biasa: batasi akses folder ini di PC anjungan.
+
+## Build jadi exe
+
+    pip install pyinstaller pystray pillow
+    python -m PyInstaller --onefile --noconsole --name biometrik-local --collect-all autoit app.py
+
+Hasil: `dist\biometrik-local.exe`. Salin ke PC anjungan bersama `config.json`
+(di folder yang sama dengan exe). Exe berjalan di system tray (klik kanan > Keluar),
+log ada di `biometrik.log` di sebelah exe. Jalankan `python app.py --no-tray` untuk
+mode konsol saat debugging.
+
+Agar jalan otomatis saat Windows menyala: taruh shortcut exe di `shell:startup`.
