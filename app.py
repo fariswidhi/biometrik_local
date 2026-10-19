@@ -37,7 +37,7 @@ DEFAULTS = {
     "path": r"C:\frista\frista.exe",
     "pathfinger": r"C:\Program Files (x86)\BPJS Kesehatan\Aplikasi Sidik Jari BPJS Kesehatan\After.exe",
     # Host web anjungan; username/password BPJS 100% diambil dari API-nya, tidak disimpan di sini
-    "credentials_url": "",
+    "credentials_url": "http://10.0.108.249:82/",
     "allowed_origins": ["http://anjungan-rsud-pati.test"],
 }
 
@@ -55,6 +55,9 @@ def load_config():
             cfg.update(json.load(f))
     except FileNotFoundError:
         pass
+    # Host kosong di config.json dianggap belum diatur: pakai host bawaan
+    if not str(cfg.get("credentials_url", "")).strip():
+        cfg["credentials_url"] = DEFAULTS["credentials_url"]
     return cfg
 
 

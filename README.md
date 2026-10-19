@@ -50,7 +50,7 @@ dipakai tanpa restart. Saat pertama kali dibuka tanpa `config.json`, jendela ini
 ## Username & password dari web anjungan
 
 Username/password BPJS **tidak disimpan di aplikasi ini**. Isi **Host web anjungan** di jendela
-Pengaturan (host saja, path API ditambahkan otomatis), misalnya `anjungan-rsud-pati.test`
+Pengaturan (host saja, path API ditambahkan otomatis). Bawaan: `http://10.0.108.249:82/`. Contoh lain: `anjungan-rsud-pati.test`
 atau `http://192.168.10.5:8000` (tombol **Tes** untuk mencoba). Kredensial diambil dari
 `/api/biometrik/credentials` setiap kali Frista/Sidik Jari dibuka, dan diatur sekali di halaman
 **Pengaturan Biometrik** pada web anjungan. Kalau API tidak bisa dihubungi, aplikasi BPJS
