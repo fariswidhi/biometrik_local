@@ -10,7 +10,7 @@ Endpoint (kompatibel dengan openFace/openFingerprint di checkin2.blade.php):
 Hanya mengotomasi UI aplikasi resmi BPJS (buka, login, isi no kartu).
 Verifikasi biometriknya tetap dilakukan di aplikasi BPJS itu sendiri.
 
-Pengaturan (path aplikasi, username, password) diubah lewat jendela Pengaturan
+Pengaturan (path aplikasi, host web anjungan) diubah lewat jendela Pengaturan
 (menu tray > Pengaturan, atau `app.py --settings`) dan disimpan di config.json.
 """
 import ctypes
@@ -36,9 +36,7 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 DEFAULTS = {
     "path": r"C:\frista\frista.exe",
     "pathfinger": r"C:\Program Files (x86)\BPJS Kesehatan\Aplikasi Sidik Jari BPJS Kesehatan\After.exe",
-    "username": "",
-    "password": "",
-    # Jika diisi, username/password diambil dari web anjungan (kolom di atas jadi cadangan)
+    # Host web anjungan; username/password BPJS 100% diambil dari API-nya, tidak disimpan di sini
     "credentials_url": "",
     "allowed_origins": ["http://anjungan-rsud-pati.test"],
 }
@@ -88,18 +86,18 @@ def fetch_credentials(host, timeout=5):
 
 
 def get_credentials(cfg):
-    """Dari API kalau credentials_url diisi, kalau gagal pakai username/password di config.json."""
-    if cfg.get("credentials_url"):
-        try:
-            return fetch_credentials(cfg["credentials_url"])
-        except Exception as e:
-            logging.error("Gagal ambil kredensial dari API (%s), memakai config lokal", e)
-    return cfg["username"], cfg["password"]
+    """Selalu dari API web anjungan. Raise kalau host belum diisi atau API gagal."""
+    if not cfg.get("credentials_url"):
+        raise ValueError("Host web anjungan belum diatur (menu tray > Pengaturan)")
+    return fetch_credentials(cfg["credentials_url"])
 
 
 def save_config(values):
     cfg = load_config()
     cfg.update(values)
+    # Buang username/password lama dari versi sebelumnya agar tidak tersisa di disk
+    cfg.pop("username", None)
+    cfg.pop("password", None)
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:
         json.dump(cfg, f, indent=4, ensure_ascii=False)
 
@@ -122,8 +120,6 @@ def settings_window():
     vars_ = {
         "path": tk.StringVar(value=cfg["path"]),
         "pathfinger": tk.StringVar(value=cfg["pathfinger"]),
-        "username": tk.StringVar(value=cfg["username"]),
-        "password": tk.StringVar(value=cfg["password"]),
         "credentials_url": tk.StringVar(value=cfg["credentials_url"]),
     }
 
@@ -143,15 +139,10 @@ def settings_window():
         ttk.Entry(frm, textvariable=vars_[key], width=60).grid(row=i, column=1, padx=6)
         ttk.Button(frm, text="Pilih...", command=lambda k=key: browse(k)).grid(row=i, column=2)
 
-    ttk.Label(frm, text="Akun login BPJS", font=("Segoe UI", 11, "bold")).grid(
+    ttk.Label(frm, text="Akun login BPJS (diambil dari web anjungan)", font=("Segoe UI", 11, "bold")).grid(
         row=3, column=0, columnspan=3, sticky="w", pady=(12, 6))
-    ttk.Label(frm, text="Username").grid(row=4, column=0, sticky="w", pady=3)
-    ttk.Entry(frm, textvariable=vars_["username"], width=30).grid(row=4, column=1, sticky="w", padx=6)
-    ttk.Label(frm, text="Password").grid(row=5, column=0, sticky="w", pady=3)
-    ttk.Entry(frm, textvariable=vars_["password"], width=30, show="*").grid(
-        row=5, column=1, sticky="w", padx=6)
-    ttk.Label(frm, text="Host web anjungan").grid(row=6, column=0, sticky="w", pady=(10, 3))
-    ttk.Entry(frm, textvariable=vars_["credentials_url"], width=60).grid(row=6, column=1, padx=6, pady=(10, 3))
+    ttk.Label(frm, text="Host web anjungan").grid(row=6, column=0, sticky="w", pady=3)
+    ttk.Entry(frm, textvariable=vars_["credentials_url"], width=60).grid(row=6, column=1, padx=6, pady=3)
 
     def tes_api():
         url = vars_["credentials_url"].get().strip()
@@ -164,16 +155,18 @@ def settings_window():
         except Exception as e:
             messagebox.showerror("Gagal", "Tidak bisa mengambil kredensial:\n%s" % e, parent=root)
 
-    ttk.Button(frm, text="Tes", command=tes_api).grid(row=6, column=2, pady=(10, 3))
+    ttk.Button(frm, text="Tes", command=tes_api).grid(row=6, column=2, pady=3)
     ttk.Label(frm, foreground="#666", justify="left",
               text="Isi host saja, mis. anjungan-rsud-pati.test atau http://192.168.10.5:8000 (tanpa path API).\n"
-                   "Jika diisi, username/password diambil dari web anjungan setiap kali dipakai.\n"
-                   "Username/password di atas hanya cadangan kalau API tidak bisa dihubungi.\n"
-                   "Disimpan di config.json (teks biasa). Batasi akses folder aplikasi ini.").grid(
+                   "Username/password tidak disimpan di PC ini; diambil dari web anjungan setiap kali dipakai\n"
+                   "(diatur di halaman Pengaturan Biometrik pada web anjungan).").grid(
         row=7, column=0, columnspan=3, sticky="w", pady=(8, 0))
 
     def simpan():
         values = {k: v.get().strip() for k, v in vars_.items()}
+        if not values["credentials_url"]:
+            messagebox.showwarning("Host kosong", "Host web anjungan wajib diisi.", parent=root)
+            return
         missing = [n for k, n in (("path", "Frista"), ("pathfinger", "Sidik jari"))
                    if values[k] and not os.path.isfile(values[k])]
         if missing and not messagebox.askyesno(

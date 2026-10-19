@@ -25,7 +25,7 @@ analisis statis. Verifikasi biometrik tetap dilakukan di aplikasi BPJS.
 ## Keamanan
 - Bind hanya `127.0.0.1`, CORS dibatasi ke `allowed_origins`.
 - `no_peserta` harus 10-20 digit (tidak bisa dipakai menyuntik keystroke lain).
-- `config.json` menyimpan password teks biasa: batasi akses folder ini di PC anjungan.
+- `config.json` hanya berisi path aplikasi dan host web anjungan; username/password BPJS tidak disimpan di PC ini.
 
 ## Build jadi exe
 
@@ -43,16 +43,17 @@ Agar jalan otomatis saat Windows menyala: taruh shortcut exe di `shell:startup`.
 
 Klik kanan ikon tray > **Pengaturan...** (atau klik dua kali ikon), atau jalankan
 `biometrik-local.exe --settings`. Di jendela itu bisa memilih path Frista dan After.exe
-(tombol Pilih...) serta mengisi username/password. Disimpan ke `config.json` dan langsung
+(tombol Pilih...) serta mengisi host web anjungan. Disimpan ke `config.json` dan langsung
 dipakai tanpa restart. Saat pertama kali dibuka tanpa `config.json`, jendela ini muncul otomatis.
 `allowed_origins` hanya bisa diubah lewat `config.json` (berlaku setelah aplikasi dibuka ulang).
 
 ## Username & password dari web anjungan
 
-Isi **Host web anjungan** di jendela Pengaturan (host saja, path API ditambahkan otomatis), misalnya
-`anjungan-rsud-pati.test` atau `http://192.168.10.5:8000` (tombol **Tes** untuk mencoba).
-Username/password lalu diambil dari web setiap kali Frista/Sidik Jari dibuka, jadi cukup
-diubah sekali di halaman **Pengaturan Biometrik** pada web anjungan. Kalau API tidak bisa
-dihubungi, dipakai username/password cadangan di `config.json`.
+Username/password BPJS **tidak disimpan di aplikasi ini**. Isi **Host web anjungan** di jendela
+Pengaturan (host saja, path API ditambahkan otomatis), misalnya `anjungan-rsud-pati.test`
+atau `http://192.168.10.5:8000` (tombol **Tes** untuk mencoba). Kredensial diambil dari
+`/api/biometrik/credentials` setiap kali Frista/Sidik Jari dibuka, dan diatur sekali di halaman
+**Pengaturan Biometrik** pada web anjungan. Kalau API tidak bisa dihubungi, aplikasi BPJS
+tidak dibuka dan penyebabnya tercatat di `biometrik.log`.
 
 API ini tanpa token. Batasi dengan kolom "IP yang boleh mengambil kredensial" di halaman web.
