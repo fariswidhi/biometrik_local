@@ -60,10 +60,25 @@ def load_config():
     return cfg
 
 
-def fetch_credentials(url, timeout=5):
+CREDENTIALS_PATH = "/api/biometrik/credentials"
+
+
+def credentials_endpoint(host):
+    """Cukup isi host web anjungan (mis. anjungan-rsud-pati.test atau http://192.168.10.5:8000).
+    Skema http:// ditambahkan kalau tidak ada, dan path API ditambahkan otomatis."""
+    host = host.strip().rstrip("/")
+    if not host.lower().startswith(("http://", "https://")):
+        host = "http://" + host
+    if not host.endswith(CREDENTIALS_PATH):
+        host += CREDENTIALS_PATH
+    return host
+
+
+def fetch_credentials(host, timeout=5):
     """Ambil {'username','password'} dari API web anjungan. Raise kalau gagal."""
     import urllib.request
 
+    url = credentials_endpoint(host)
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         data = json.loads(resp.read().decode("utf-8"))
@@ -135,13 +150,13 @@ def settings_window():
     ttk.Label(frm, text="Password").grid(row=5, column=0, sticky="w", pady=3)
     ttk.Entry(frm, textvariable=vars_["password"], width=30, show="*").grid(
         row=5, column=1, sticky="w", padx=6)
-    ttk.Label(frm, text="URL API kredensial").grid(row=6, column=0, sticky="w", pady=(10, 3))
+    ttk.Label(frm, text="Host web anjungan").grid(row=6, column=0, sticky="w", pady=(10, 3))
     ttk.Entry(frm, textvariable=vars_["credentials_url"], width=60).grid(row=6, column=1, padx=6, pady=(10, 3))
 
     def tes_api():
         url = vars_["credentials_url"].get().strip()
         if not url:
-            messagebox.showwarning("URL kosong", "Isi URL API kredensial dulu.", parent=root)
+            messagebox.showwarning("Host kosong", "Isi host web anjungan dulu.", parent=root)
             return
         try:
             user, _ = fetch_credentials(url)
@@ -151,7 +166,8 @@ def settings_window():
 
     ttk.Button(frm, text="Tes", command=tes_api).grid(row=6, column=2, pady=(10, 3))
     ttk.Label(frm, foreground="#666", justify="left",
-              text="Jika URL diisi, username/password diambil dari web anjungan setiap kali dipakai.\n"
+              text="Isi host saja, mis. anjungan-rsud-pati.test atau http://192.168.10.5:8000 (tanpa path API).\n"
+                   "Jika diisi, username/password diambil dari web anjungan setiap kali dipakai.\n"
                    "Username/password di atas hanya cadangan kalau API tidak bisa dihubungi.\n"
                    "Disimpan di config.json (teks biasa). Batasi akses folder aplikasi ini.").grid(
         row=7, column=0, columnspan=3, sticky="w", pady=(8, 0))

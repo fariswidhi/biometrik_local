@@ -49,8 +49,8 @@ dipakai tanpa restart. Saat pertama kali dibuka tanpa `config.json`, jendela ini
 
 ## Username & password dari web anjungan
 
-Isi **URL API kredensial** di jendela Pengaturan, misalnya
-`http://anjungan-rsud-pati.test/api/biometrik/credentials` (tombol **Tes** untuk mencoba).
+Isi **Host web anjungan** di jendela Pengaturan (host saja, path API ditambahkan otomatis), misalnya
+`anjungan-rsud-pati.test` atau `http://192.168.10.5:8000` (tombol **Tes** untuk mencoba).
 Username/password lalu diambil dari web setiap kali Frista/Sidik Jari dibuka, jadi cukup
 diubah sekali di halaman **Pengaturan Biometrik** pada web anjungan. Kalau API tidak bisa
 dihubungi, dipakai username/password cadangan di `config.json`.
