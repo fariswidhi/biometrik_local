@@ -30,8 +30,26 @@ if getattr(sys, "frozen", False):
     BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-with open(os.path.join(BASE_DIR, "config.json"), "r", encoding="utf-8") as f:
-    config = json.load(f)
+
+
+def show_message(text, icon=0x40):
+    """Kotak pesan Windows (0x40 info, 0x10 error). Dipakai karena exe tanpa konsol."""
+    ctypes.windll.user32.MessageBoxW(0, text, "Biometrik Local", icon | 0x40000)
+
+
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+try:
+    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+        config = json.load(f)
+except (OSError, ValueError) as e:
+    show_message("config.json tidak bisa dibaca:\n%s\n\n%s" % (CONFIG_PATH, e), 0x10)
+    sys.exit(1)
+
+# Cegah dua salinan berjalan bersamaan (port 5000 hanya bisa dipakai satu)
+_mutex = ctypes.windll.kernel32.CreateMutexW(None, False, "Global\\BiometrikLocalSingleInstance")
+if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+    show_message("Biometrik Local sudah berjalan.\nCari ikonnya di system tray (klik panah ^ di dekat jam).")
+    sys.exit(0)
 
 FRISTA_PATH = config["path"]
 FINGER_PATH = config["pathfinger"]
@@ -193,7 +211,14 @@ def run_tray():
         os._exit(0)
 
     threading.Thread(target=run_server, daemon=True).start()
-    menu = pystray.Menu(
+    # Tampilkan pesan di thread terpisah agar tidak menahan icon tray
+    threading.Thread(
+        target=show_message,
+        args=("Biometrik Local aktif di port 5000.\nAplikasi berjalan di system tray "
+              "(klik panah ^ di dekat jam, klik kanan ikon > Keluar untuk menutup).",),
+        daemon=True,
+    ).start()
+    menu =pystray.Menu(
         pystray.MenuItem("Biometrik Local (port 5000)", None, enabled=False),
         pystray.MenuItem("Keluar", keluar),
     )
