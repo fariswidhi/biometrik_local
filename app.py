@@ -9,6 +9,9 @@ Endpoint (kompatibel dengan openFace/openFingerprint di checkin2.blade.php):
 
 Hanya mengotomasi UI aplikasi resmi BPJS (buka, login, isi no kartu).
 Verifikasi biometriknya tetap dilakukan di aplikasi BPJS itu sendiri.
+
+Pengaturan (path aplikasi, username, password) diubah lewat jendela Pengaturan
+(menu tray > Pengaturan, atau `app.py --settings`) dan disimpan di config.json.
 """
 import ctypes
 import json
@@ -26,10 +29,17 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 # Saat dibungkus exe (PyInstaller), config.json dibaca dari folder tempat exe berada
-if getattr(sys, "frozen", False):
-    BASE_DIR = os.path.dirname(sys.executable)
-else:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FROZEN = getattr(sys, "frozen", False)
+BASE_DIR = os.path.dirname(sys.executable) if FROZEN else os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+
+DEFAULTS = {
+    "path": r"C:\frista\frista.exe",
+    "pathfinger": r"C:\Program Files (x86)\BPJS Kesehatan\Aplikasi Sidik Jari BPJS Kesehatan\After.exe",
+    "username": "",
+    "password": "",
+    "allowed_origins": ["http://anjungan-rsud-pati.test"],
+}
 
 
 def show_message(text, icon=0x40):
@@ -37,13 +47,115 @@ def show_message(text, icon=0x40):
     ctypes.windll.user32.MessageBoxW(0, text, "Biometrik Local", icon | 0x40000)
 
 
-CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
-try:
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        config = json.load(f)
-except (OSError, ValueError) as e:
-    show_message("config.json tidak bisa dibaca:\n%s\n\n%s" % (CONFIG_PATH, e), 0x10)
-    sys.exit(1)
+def load_config():
+    """Baca config.json setiap dipakai, supaya perubahan dari jendela Pengaturan langsung berlaku."""
+    cfg = dict(DEFAULTS)
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            cfg.update(json.load(f))
+    except FileNotFoundError:
+        pass
+    return cfg
+
+
+def save_config(values):
+    cfg = load_config()
+    cfg.update(values)
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=4, ensure_ascii=False)
+
+
+def settings_window():
+    """Jendela pengaturan. Mengembalikan True kalau disimpan."""
+    import tkinter as tk
+    from tkinter import filedialog, messagebox, ttk
+
+    cfg = load_config()
+    saved = {"ok": False}
+
+    root = tk.Tk()
+    root.title("Biometrik Local - Pengaturan")
+    root.resizable(False, False)
+    root.attributes("-topmost", True)
+    frm = ttk.Frame(root, padding=16)
+    frm.grid()
+
+    vars_ = {
+        "path": tk.StringVar(value=cfg["path"]),
+        "pathfinger": tk.StringVar(value=cfg["pathfinger"]),
+        "username": tk.StringVar(value=cfg["username"]),
+        "password": tk.StringVar(value=cfg["password"]),
+    }
+
+    def browse(key):
+        f = filedialog.askopenfilename(
+            parent=root, title="Pilih aplikasi",
+            filetypes=[("Aplikasi", "*.exe"), ("Semua file", "*.*")],
+            initialdir=os.path.dirname(vars_[key].get()) or None)
+        if f:
+            vars_[key].set(os.path.normpath(f))
+
+    ttk.Label(frm, text="Aplikasi BPJS", font=("Segoe UI", 11, "bold")).grid(
+        row=0, column=0, columnspan=3, sticky="w", pady=(0, 6))
+    rows = [("Frista (wajah)", "path"), ("Sidik jari (After.exe)", "pathfinger")]
+    for i, (label, key) in enumerate(rows, start=1):
+        ttk.Label(frm, text=label).grid(row=i, column=0, sticky="w", pady=3)
+        ttk.Entry(frm, textvariable=vars_[key], width=60).grid(row=i, column=1, padx=6)
+        ttk.Button(frm, text="Pilih...", command=lambda k=key: browse(k)).grid(row=i, column=2)
+
+    ttk.Label(frm, text="Akun login BPJS", font=("Segoe UI", 11, "bold")).grid(
+        row=3, column=0, columnspan=3, sticky="w", pady=(12, 6))
+    ttk.Label(frm, text="Username").grid(row=4, column=0, sticky="w", pady=3)
+    ttk.Entry(frm, textvariable=vars_["username"], width=30).grid(row=4, column=1, sticky="w", padx=6)
+    ttk.Label(frm, text="Password").grid(row=5, column=0, sticky="w", pady=3)
+    ttk.Entry(frm, textvariable=vars_["password"], width=30, show="*").grid(
+        row=5, column=1, sticky="w", padx=6)
+    ttk.Label(frm, foreground="#666",
+              text="Disimpan di config.json (teks biasa). Batasi akses folder aplikasi ini.").grid(
+        row=6, column=0, columnspan=3, sticky="w", pady=(8, 0))
+
+    def simpan():
+        values = {k: v.get().strip() for k, v in vars_.items()}
+        missing = [n for k, n in (("path", "Frista"), ("pathfinger", "Sidik jari"))
+                   if values[k] and not os.path.isfile(values[k])]
+        if missing and not messagebox.askyesno(
+                "File tidak ditemukan",
+                "File aplikasi %s tidak ditemukan.\nTetap simpan?" % ", ".join(missing), parent=root):
+            return
+        try:
+            save_config(values)
+        except OSError as e:
+            messagebox.showerror("Gagal menyimpan", "%s\n\n%s" % (CONFIG_PATH, e), parent=root)
+            return
+        saved["ok"] = True
+        messagebox.showinfo("Tersimpan", "Pengaturan disimpan dan langsung dipakai.", parent=root)
+        root.destroy()
+
+    btns = ttk.Frame(frm)
+    btns.grid(row=7, column=0, columnspan=3, sticky="e", pady=(14, 0))
+    ttk.Button(btns, text="Batal", command=root.destroy).grid(row=0, column=0, padx=6)
+    ttk.Button(btns, text="Simpan", command=simpan).grid(row=0, column=1)
+
+    root.mainloop()
+    return saved["ok"]
+
+
+def open_settings_process():
+    """Buka jendela pengaturan di proses terpisah (tidak mengganggu icon tray)."""
+    cmd = [sys.executable, "--settings"] if FROZEN else [sys.executable, os.path.abspath(__file__), "--settings"]
+    subprocess.Popen(cmd)
+
+
+# Mode jendela pengaturan saja: tidak ada server, tidak kena batas satu salinan
+if "--settings" in sys.argv:
+    settings_window()
+    sys.exit(0)
+
+# Pertama kali dijalankan (config.json belum ada): minta pengaturan dulu
+if not os.path.isfile(CONFIG_PATH):
+    show_message("Selamat datang. Atur dulu path aplikasi BPJS dan akun login.")
+    if not settings_window():
+        sys.exit(0)
 
 # Cegah dua salinan berjalan bersamaan (port 5000 hanya bisa dipakai satu)
 _mutex = ctypes.windll.kernel32.CreateMutexW(None, False, "Global\\BiometrikLocalSingleInstance")
@@ -51,22 +163,18 @@ if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
     show_message("Biometrik Local sudah berjalan.\nCari ikonnya di system tray (klik panah ^ di dekat jam).")
     sys.exit(0)
 
-FRISTA_PATH = config["path"]
-FINGER_PATH = config["pathfinger"]
-USERNAME = config["username"]
-PASSWORD = config["password"]
-
 FRISTA_LOGIN_TITLE = "Login Frista (Face Recognition BPJS Kesehatan)"
 FRISTA_MAIN_TITLE = "Frista (Face Recognition BPJS Kesehatan) 3.0.2"
 FINGER_TITLE = "Aplikasi Registrasi Sidik Jari"
 
 app = Flask(__name__)
 # Hanya halaman anjungan yang boleh memanggil layanan ini dari browser
-CORS(app, origins=config.get("allowed_origins", ["http://anjungan-rsud-pati.test"]))
+# (perubahan allowed_origins di config.json berlaku setelah aplikasi dibuka ulang)
+CORS(app, origins=load_config()["allowed_origins"])
 # Tanpa konsol (exe), log ditulis ke biometrik.log di sebelah exe
 logging.basicConfig(
     level=logging.INFO,
-    filename=os.path.join(BASE_DIR, "biometrik.log") if getattr(sys, "frozen", False) else None,
+    filename=os.path.join(BASE_DIR, "biometrik.log") if FROZEN else None,
 )
 
 user32 = ctypes.windll.user32
@@ -89,7 +197,8 @@ def kill_process(name):
 def run_finger(no_peserta):
     with ui_lock:
         try:
-            autoit.run(FINGER_PATH)
+            cfg = load_config()
+            autoit.run(cfg["pathfinger"])
             if not autoit.win_wait_active(sel(FINGER_TITLE), 10):
                 logging.error("Window '%s' tidak muncul dalam 10 detik", FINGER_TITLE)
                 return
@@ -98,10 +207,10 @@ def run_finger(no_peserta):
 
             user32.BlockInput(True)
             try:
-                autoit.control_send(sel(FINGER_TITLE), "", USERNAME, 1)
+                autoit.control_send(sel(FINGER_TITLE), "", cfg["username"], 1)
                 autoit.control_send(sel(FINGER_TITLE), "", "{TAB}")
                 time.sleep(0.5)
-                autoit.control_send(sel(FINGER_TITLE), "", PASSWORD, 1)
+                autoit.control_send(sel(FINGER_TITLE), "", cfg["password"], 1)
                 autoit.control_send(sel(FINGER_TITLE), "", "{TAB}")
                 autoit.control_send(sel(FINGER_TITLE), "", "{SPACE}")
             finally:
@@ -117,7 +226,8 @@ def run_finger(no_peserta):
 def run_frista(no_peserta):
     with ui_lock:
         try:
-            autoit.run(FRISTA_PATH)
+            cfg = load_config()
+            autoit.run(cfg["path"])
             autoit.win_wait(sel(FRISTA_LOGIN_TITLE), 10)
             autoit.win_activate(sel(FRISTA_LOGIN_TITLE))
             autoit.win_set_on_top(sel(FRISTA_LOGIN_TITLE), 1)
@@ -125,11 +235,11 @@ def run_frista(no_peserta):
             user32.BlockInput(True)
             try:
                 autoit.control_focus(sel(FRISTA_LOGIN_TITLE), "TkChild4")
-                autoit.control_send(sel(FRISTA_LOGIN_TITLE), "TkChild4", USERNAME, 1)
+                autoit.control_send(sel(FRISTA_LOGIN_TITLE), "TkChild4", cfg["username"], 1)
                 autoit.control_send(sel(FRISTA_LOGIN_TITLE), "TkChild4", "{TAB}")
                 time.sleep(0.5)
                 autoit.control_focus(sel(FRISTA_LOGIN_TITLE), "TkChild3")
-                autoit.control_send(sel(FRISTA_LOGIN_TITLE), "TkChild3", PASSWORD, 1)
+                autoit.control_send(sel(FRISTA_LOGIN_TITLE), "TkChild3", cfg["password"], 1)
                 autoit.control_send(sel(FRISTA_LOGIN_TITLE), "TkChild3", "{TAB}")
                 autoit.control_send(sel(FRISTA_LOGIN_TITLE), "Button1", "{SPACE}")
                 time.sleep(1)  # tunggu jendela utama Frista
@@ -215,11 +325,12 @@ def run_tray():
     threading.Thread(
         target=show_message,
         args=("Biometrik Local aktif di port 5000.\nAplikasi berjalan di system tray "
-              "(klik panah ^ di dekat jam, klik kanan ikon > Keluar untuk menutup).",),
+              "(klik panah ^ di dekat jam, klik kanan ikon > Pengaturan / Keluar).",),
         daemon=True,
     ).start()
-    menu =pystray.Menu(
+    menu = pystray.Menu(
         pystray.MenuItem("Biometrik Local (port 5000)", None, enabled=False),
+        pystray.MenuItem("Pengaturan...", lambda icon, item: open_settings_process(), default=True),
         pystray.MenuItem("Keluar", keluar),
     )
     pystray.Icon("biometrik-local", img, "Biometrik Local", menu).run()

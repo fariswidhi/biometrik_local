@@ -10,8 +10,7 @@ analisis statis. Verifikasi biometrik tetap dilakukan di aplikasi BPJS.
 ## Pasang (PC anjungan, Windows)
 
     pip install -r requirements.txt
-    copy config.example.json config.json   # isi username & password, JANGAN di-commit
-    python app.py
+    python app.py          # pertama kali: jendela Pengaturan muncul, config.json dibuat otomatis
 
 `pyautoit` memerlukan `AutoItX3` (terpasang bersama AutoIt, atau salin `AutoItX3_x64.dll`).
 
@@ -39,3 +38,11 @@ log ada di `biometrik.log` di sebelah exe. Jalankan `python app.py --no-tray` un
 mode konsol saat debugging.
 
 Agar jalan otomatis saat Windows menyala: taruh shortcut exe di `shell:startup`.
+
+## Pengaturan lewat UI
+
+Klik kanan ikon tray > **Pengaturan...** (atau klik dua kali ikon), atau jalankan
+`biometrik-local.exe --settings`. Di jendela itu bisa memilih path Frista dan After.exe
+(tombol Pilih...) serta mengisi username/password. Disimpan ke `config.json` dan langsung
+dipakai tanpa restart. Saat pertama kali dibuka tanpa `config.json`, jendela ini muncul otomatis.
+`allowed_origins` hanya bisa diubah lewat `config.json` (berlaku setelah aplikasi dibuka ulang).
