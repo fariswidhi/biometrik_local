@@ -1,0 +1,7 @@
+{
+    "path": "C:\\frista\\frista.exe",
+    "pathfinger": "C:\\Program Files (x86)\\BPJS Kesehatan\\Aplikasi Sidik Jari BPJS Kesehatan\\After.exe",
+    "username": "",
+    "password": "",
+    "allowed_origins": ["http://anjungan-rsud-pati.test"]
+}
